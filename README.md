@@ -15,7 +15,9 @@ The publicly available  datasets were used in this study. You can download them 
 ## Run SpaDAMA and other Baselines models
 After configuring the environment, download dataset4 from the Simulated_datasets in the data repository and place it into the Simulated_datasets folder. Then, Run `main_code.py`to start the process.If you want to run other data, simply modify the file path.
 
-## Cite
+## Citing
+
+SpaDAMA: Spatial Transcriptomics Deconvolution Using Domain-Adversarial Masked Autoencoder
 
 ## Contact
 huanglin212@aliyun.com
