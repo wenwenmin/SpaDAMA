@@ -20,6 +20,4 @@ After configuring the environment, download dataset4 from the Simulated_datasets
 SpaDAMA: Spatial Transcriptomics Deconvolution Using Domain-Adversarial Masked Autoencoder
 
 ## Contact
-huanglin212@aliyun.com
-
-minwenwen@ynu.edu.cn
+If you have any questions, please contact huanglin212@aliyun.com and minwenwen@ynu.edu.cn
