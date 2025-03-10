@@ -1,6 +1,5 @@
 # SpaDAMA
-In this study, we introduce a Domain-Adversarial Masked Autoencoder (SpaDAMA) for cell type deconvolution  in spatial transcriptomics data. SpaDAMA leverages Domain-Adversarial learning to align real ST data with simulated ST data generated from scRNA-seq data. By projecting both datasets into a shared latent space, SpaDAMA effectively minimizes the data modality gap. Furthermore, SpaDAMA incorporates masking techniques to enhance the model’s ability to learn robust features from real ST data, while mitigating noise and spatial confounding factors.
-
+We propose SpaDAMA, a Domain-Adversarial Masked Autoencoder, for cell-type deconvolution in spatial transcriptomics. Utilizing Domain-Adversarial learning, SpaDAMA aligns real ST data with simulated ST data derived from scRNA-seq, mapping both into a common latent space to reduce the modality gap. Additionally, it employs masking strategies to strengthen feature learning from real ST data while suppressing noise and spatial confounders.
 ![(Variational)](fig1.png)
 
 
