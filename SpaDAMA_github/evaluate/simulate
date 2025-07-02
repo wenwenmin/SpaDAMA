@@ -1,1 +1,225 @@
+import statistics
+
+from skimage.metrics import mean_squared_error
+import scipy.stats as st
+from scipy.spatial.distance import jensenshannon
+from sklearn.metrics import mean_squared_error
+import numpy as np
+import pandas as pd
+
+def ssim(im1,im2,M=1):
+    im1, im2 = im1/im1.max(), im2/im2.max()
+    mu1 = im1.mean()
+    mu2 = im2.mean()
+    sigma1 = np.sqrt(((im1 - mu1) ** 2).mean())
+    sigma2 = np.sqrt(((im2 - mu2) ** 2).mean())
+    sigma12 = ((im1 - mu1) * (im2 - mu2)).mean()
+    k1, k2, L = 0.01, 0.03, M
+    C1 = (k1*L) ** 2
+    C2 = (k2*L) ** 2
+    C3 = C2/2
+    l12 = (2*mu1*mu2 + C1)/(mu1 ** 2 + mu2 ** 2 + C1)
+    c12 = (2*sigma1*sigma2 + C2)/(sigma1 ** 2 + sigma2 ** 2 + C2)
+    s12 = (sigma12 + C3)/(sigma1*sigma2 + C3)
+    ssim = l12 * c12 * s12
+    return ssim
+
+def rmse(x1,x2):
+    return mean_squared_error(x1,x2,squared=False)
+
+
+def pcc(raw, impute):
+    print("raw.shape:",raw.shape,"impute.shape:",impute.shape)
+    if raw.shape[0] == impute.shape[0]:
+        result=[]
+        # result = pd.DataFrame()
+        for label in raw.columns:
+            if label not in impute.columns:
+                pearsonr = 0
+            else:
+                raw_col = raw.loc[:, label]
+                impute_col = impute.loc[:, label]
+                impute_col = impute_col.fillna(1e-20)
+                raw_col = raw_col.fillna(1e-20)
+                pearsonr, _ = st.pearsonr(raw_col, impute_col)
+                # pearman’s rank correlation coefficien
+            # pcc_df = pd.DataFrame(pearsonr, index=["PCC"], columns=[label])
+            # result = pd.concat([result, pcc_df], axis=1)
+            result.append(pearsonr)
+    else:
+        print("columns error")
+    return result
+
+
+def js(x1,x2):
+    return jensenshannon(x1,x2)
+
+def calculate_rank_as(scores):
+    sorted_indices = np.argsort(scores)  # Indices that would sort the array
+    rank = np.empty_like(scores)
+    rank[sorted_indices] = np.arange(len(scores))
+    return rank
+
+def calculate_rank_de(scores):
+    sorted_indices = np.argsort(scores)[::-1]  # Reverse the sorted order for descending ranks
+    ranks = np.empty_like(scores)
+    ranks[sorted_indices] = np.arange(len(scores))
+    return ranks
+js_a,js_b, js_c, js_d= [], [], [], []
+pcc_a,pcc_b, pcc_c, pcc_d= [], [], [], []
+rmse_a,rmse_b, rmse_c, rmse_d= [], [], [], []
+ssim_a,ssim_b, ssim_c, ssim_d= [], [], [], []
+
+# Loop over each dataset
+for i in range(1,33):
+    print("Dataset " + str(i) + " comparisons:")
+    filepath = 'E:\第一次项目——MACD\Project_data\SimualtedSpatalData\dataset' + str(i) + '/pro_real.csv'
+    MCCDfile2 = 'D:\pythonplaces\MACD_github\MACD1\Result_2\dataset_sim' + str(i) + '/final_pro.csv'
+    MCCDfile3 = 'D:\pythonplaces\MACD_github\MACD1\Result\dataset_sim' + str(i) + '/final_pro.csv'
+    MCCDfile4 = 'D:\pythonplaces\MACD_github\MACD1\Result_4\dataset_sim' + str(i) + '/final_pro.csv'
+    MCCDfile5 = 'D:\pythonplaces\MACD_github\MACD1\Result_5\dataset_sim' + str(i) + '/final_pro.csv'
+
+    # Read data from CSV files
+    realpro = pd.read_csv(filepath, delimiter=',', header=0, index_col=0)
+    MCCDpro2 = pd.read_csv(MCCDfile2, delimiter=',', header=0, index_col=0)
+    MCCDpro3 = pd.read_csv(MCCDfile3, delimiter=',', header=0, index_col=0)
+    MCCDpro4 = pd.read_csv(MCCDfile4, delimiter=',', header=0, index_col=0)
+    MCCDpro5 = pd.read_csv(MCCDfile5, delimiter=',', header=0, index_col=0)
+    MCCDpro2[MCCDpro2 < 0.01] = 0
+    MCCDpro3[MCCDpro3 < 0.01] = 0
+    MCCDpro4[MCCDpro4 < 0.01] = 0
+    MCCDpro5[MCCDpro5 < 0.01] = 0
+
+    # Reorder columns based on common column names
+    columns1 = realpro.columns.tolist()
+    columns2 = MCCDpro2.columns.tolist()
+    common_columns = sorted(list(set(columns1) & set(columns2)))
+
+    realpro = realpro[common_columns]
+    MCCDpro2 = MCCDpro2[common_columns]
+    MCCDpro3 = MCCDpro3[common_columns]
+    MCCDpro4 = MCCDpro4[common_columns]
+    MCCDpro5 = MCCDpro5[common_columns]
+
+
+
+    # Calculate RMSE scores
+    A=rmse(realpro, MCCDpro2)
+    B = rmse(realpro, MCCDpro3)
+    C = rmse(realpro, MCCDpro4)
+    D = rmse(realpro, MCCDpro5)
+
+    # Store RMSE scores
+    rmse_a.append(A)
+    rmse_b.append(B)
+    rmse_c.append(C)
+    rmse_d.append(D)
+
+
+    # Calculate SSIM scores
+
+    A= ssim(realpro, MCCDpro2)
+    A = [x for x in A if not np.isnan(x)]
+
+    B = ssim(realpro, MCCDpro3)
+    B = [x for x in B if not np.isnan(x)]
+    C = ssim(realpro, MCCDpro4)
+    C = [x for x in C if not np.isnan(x)]
+    D = ssim(realpro, MCCDpro5)
+    D = [x for x in D if not np.isnan(x)]
+
+    # Store SSIM scores
+    ssim_a.append(np.mean(A))
+    ssim_b.append(np.mean(B))
+    ssim_c.append(np.mean(C))
+    ssim_d.append(np.mean(D))
+
+    # Calculate PCC scores
+
+    A = pcc(realpro, MCCDpro2)
+    A = [x for x in A if not np.isnan(x)]
+    B = pcc(realpro, MCCDpro3)
+    B = [x for x in B if not np.isnan(x)]
+    C = pcc(realpro, MCCDpro4)
+    C = [x for x in C if not np.isnan(x)]
+    D = pcc(realpro, MCCDpro5)
+    D = [x for x in D if not np.isnan(x)]
+
+
+    # print(f"PCC:{np.mean(A):.4f}, {np.mean(B):.4f},{np.mean(C):.4f},{np.mean(D):.4f}, {np.mean(E):.4f}, {np.mean(F):.4f},{np.mean(G):.4f},")
+
+    # Store PCC scores
+    pcc_a.append(np.mean(A))
+    pcc_b.append(np.mean(B))
+    pcc_c.append(np.mean(C))
+    pcc_d.append(np.mean(D))
+
+
+
+    # Calculate JS scores
+    A = js(realpro, MCCDpro2)
+    A = [x for x in A if not np.isnan(x)]
+    B = js(realpro, MCCDpro3)
+    B = [x for x in B if not np.isnan(x)]
+    C = js(realpro, MCCDpro4)
+    C = [x for x in C if not np.isnan(x)]
+    D = js(realpro, MCCDpro5)
+    D = [x for x in D if not np.isnan(x)]
+
+
+    # Store JS scores
+    js_a.append(np.mean(A))
+    js_b.append(np.mean(B))
+    js_c.append(np.mean(C))
+    js_d.append(np.mean(D))
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Example data (replace with your actual results)
+metrics_data = {
+    'PCC': [pcc_a, pcc_b, pcc_c, pcc_d],
+    'SSIM': [ssim_a, ssim_b, ssim_c, ssim_d],
+    'RMSE': [rmse_a, rmse_b, rmse_c, rmse_d],
+    'JS': [js_a, js_b, js_c, js_d]
+}
+
+colors1 = [
+    "#FA7F73", "#7FAFD1", "#FCB264", "#B1DD6D",
+    "#BBB8D9", "#E8B3B0","#8DD1C6"]
+
+# Create a 1 row, 4 column layout for subplots
+fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+
+for ax, (metric, data) in zip(axs, metrics_data.items()):
+    # Convert data into DataFrame (assuming a, b, c, d are the values for the methods)
+    df = pd.DataFrame({
+        '0.2': data[0],
+        '0.3': data[1],
+        '0.4': data[2],
+        '0.5': data[3]
+    })
+
+    # Melt the DataFrame into long format
+    df_long = pd.melt(df, var_name='Method', value_name=metric)
+
+    # Create the boxplot for this metric
+    sns.boxplot(data=df_long, x='Method', y=metric, palette=colors1, showfliers=False, ax=ax, width=0.65)
+
+    # # Plot the mean values as green triangles for each method
+    # for i, method in enumerate(df.columns):
+    #     mean_value = df[method].mean()
+    #     ax.plot(i, mean_value, 'g^', markersize=10, alpha=0.8)  # Use index `i` for positioning the triangle
+
+    # Set titles and labels
+    ax.set_title(f'{metric} Comparison')
+    ax.set_xlabel('Method')
+    ax.set_ylabel(metric)
+
+# Adjust the layout to avoid overlap and add labels
+plt.tight_layout()
+plt.savefig(r'simulate_retion.pdf', format='pdf')
+# Display the plot
+plt.show()
 
