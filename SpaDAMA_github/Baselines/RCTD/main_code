@@ -1,1 +1,140 @@
+import scanpy as sc
+import pandas as pd
+import os
+import numpy as np
+import tracemalloc
+import time
+from rpy2.robjects import r, pandas2ri
+from rpy2.robjects.packages import importr
+import rpy2.robjects as robjects
+print(robjects.r('R.home()'))
 
+from rpy2.robjects.packages import importr
+spacexr = importr("spacexr")
+print("spacexr加载成功！")
+# 启用 pandas 与 R 的自动转换
+pandas2ri.activate()
+import re
+def clean_celltype_labels(labels):
+    # 替换掉非字母数字或下划线的字符为下划线
+    return labels.apply(lambda x: re.sub(r"[^\w\s-]", "_", str(x)))
+
+def main(a, b, cell_key, x, y):
+    for i in range(a, b):
+        print("——————————第" + str(i) + "个数据——————————")
+        start_time = time.time()
+        tracemalloc.start()
+        """E:\第一次项目——MACD\MACD_github\Datasets\Real_datasets\dataset1\scRNA.h5ad"""
+        sc_h5ad_fp = f'E:\第一次项目——MACD\MACD_github\Datasets\Real_datasets\dataset{i}\\scRNA.h5ad'
+        st_h5ad_fp = f'E:\第一次项目——MACD\MACD_github\Datasets\Real_datasets\dataset{i}\\Spatial.h5ad'
+        out_dir = f'E:\第一次项目——MACD\MACD_github\Baselines\RCTD\Result\dataset{i}'
+        os.makedirs(out_dir, exist_ok=True)
+        out_matrix_norm_fp = os.path.join(out_dir, "result.csv")
+        print(out_matrix_norm_fp)
+        # === 1. 读取 ST 数据 ===
+        adata_st = sc.read_h5ad(st_h5ad_fp)
+
+        # 检查空间坐标是否在 obsm
+        if "spatial" in adata_st.obsm:
+            st_locations = pd.DataFrame(adata_st.obsm["spatial"], index=adata_st.obs_names, columns=["X", "Y"])
+        else:
+            st_locations = adata_st.obs[[x, y]]  # fallback：确保你有 X/Y 列
+
+        # counts: 基因 × 空间点
+        # st_counts = pd.DataFrame(adata_st.X.T, index=adata_st.var_names, columns=adata_st.obs_names)
+        st_counts = pd.DataFrame(
+            (adata_st.X.toarray() if hasattr(adata_st.X, "toarray") else adata_st.X).T,
+            index=adata_st.var_names,
+            columns=adata_st.obs_names
+        )
+
+        # === 2. 读取 scRNA 数据 ===
+        adata_sc = sc.read_h5ad(sc_h5ad_fp)
+
+        # counts: 基因 × 单细胞
+        # sc_counts = pd.DataFrame(adata_sc.X.T, index=adata_sc.var_names, columns=adata_sc.obs_names)
+        # sc_counts = pd.DataFrame(
+        #     (adata_sc.X.toarray() if hasattr(adata_sc.X, "toarray") else adata_sc.X).T,
+        #     index=adata_sc.var_names,
+        #     columns=adata_sc.obs_names
+        # )
+        sc_raw = adata_sc.X.toarray() if hasattr(adata_sc.X, "toarray") else adata_sc.X
+        sc_counts = pd.DataFrame(
+            np.rint(sc_raw).astype(int).T,
+            index=adata_sc.var_names,
+            columns=adata_sc.obs_names
+        )
+
+        # 细胞类型标签，替换成你实际的列名
+        cell_type_col = cell_key  # or "celltype_major", etc.
+        assert cell_type_col in adata_sc.obs.columns, f"{cell_type_col} not found in scRNA obs"
+        sc_labels = adata_sc.obs[cell_type_col]
+        print("🧬 Unique cell types (before cleaning):", sc_labels.unique())
+        sc_labels_cleaned = clean_celltype_labels(sc_labels)
+        print("🧬 Cleaned cell types:", sc_labels_cleaned.unique())
+
+        # === 3. 加载 R 包 ===
+        spacexr = importr("spacexr")
+
+        # === 4. 将数据传入 R ===
+        r.assign("st_counts", pandas2ri.py2rpy(st_counts))
+        r.assign("st_locations", pandas2ri.py2rpy(st_locations))
+        r.assign("sc_counts", pandas2ri.py2rpy(sc_counts))
+        # r.assign("sc_labels", pandas2ri.py2rpy(sc_labels))
+        r.assign("sc_labels", pandas2ri.py2rpy(sc_labels_cleaned))
+
+        # === 5. 在 R 中运行 RCTD ===
+
+        safe_out_path = out_matrix_norm_fp.replace("\\", "/")
+
+        # 用 R 调用 RCTD 分析
+        r(f'''
+        options(error = function() {{ traceback(2); quit(save = "no", status = 1) }})
+
+        library(spacexr)
+        print("📌 spacexr loaded")
+
+        print("📌 Creating Reference object...")
+        sc_reference <- Reference(counts = sc_counts, cell_types = sc_labels)
+        print("✅ Reference created")
+
+        print("📌 Creating SpatialRNA object...")
+        st_data <- SpatialRNA(counts = st_counts, coords = st_locations, require_int = FALSE)
+        print("✅ SpatialRNA created")
+
+        print("📌 Running create.RCTD...")
+        myRCTD <- create.RCTD(st_data, sc_reference, max_cores = 1, CELL_MIN_INSTANCE = 1)
+        print("✅ RCTD object created")
+
+        print("📌 Running run.RCTD...")
+        myRCTD <- run.RCTD(myRCTD, doublet_mode = "doublet")
+        print("✅ run.RCTD complete")
+
+        print("📌 Extracting results...")
+        weights <- myRCTD@results$weights
+        norm_weights <- normalize_weights(weights)
+        print("✅ Weights normalized")
+
+        print("📌 Saving results...")
+        write.csv(as.matrix(norm_weights), file = "{safe_out_path}", quote = FALSE)
+        print("✅ Results saved")
+        ''')
+
+        print("✅ RCTD 运行完成，结果保存至：", out_matrix_norm_fp)
+        end_time = time.time()  # 记录结束时间
+        total_time = end_time - start_time  # 计算总时间
+        print(f"novoSpaRC Total time taken: {total_time:.2f} seconds")  # 打印总时间
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"[Peak Memory] Current: {current / 1024 / 1024:.2f} MB; Peak: {peak / 1024 / 1024:.2f} MB")
+
+        tracemalloc.stop()
+
+
+for start, end, cell_type_column, x_column, y_column in [
+    # (1, 2, 'cell_type', 'x', 'y'),
+    # (2, 3, 'cell_types', 'array_row', 'array_col'),
+    (3, 4, 'celltype_new', 'spatial_x', 'spatial_y'),
+
+    (6, 7, 'label', 'x', 'y')
+]:
+    main(start, end, cell_type_column, x_column, y_column)
